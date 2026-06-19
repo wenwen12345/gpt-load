@@ -135,6 +135,7 @@ function getChannelTagType(channelType: string) {
   switch (channelType) {
     case "openai":
     case "openai-response":
+    case "openai-image-generation":
       return "success";
     case "gemini":
       return "info";
@@ -401,6 +402,7 @@ function handleDragEnd() {
                 <span v-if="group.group_type === 'aggregate'">🔗</span>
                 <span v-else-if="group.channel_type === 'openai'">🤖</span>
                 <span v-else-if="group.channel_type === 'openai-response'">🔁</span>
+                <span v-else-if="group.channel_type === 'openai-image-generation'">🎨</span>
                 <span v-else-if="group.channel_type === 'gemini'">💎</span>
                 <span v-else-if="group.channel_type === 'anthropic'">🧠</span>
                 <span v-else>🔧</span>

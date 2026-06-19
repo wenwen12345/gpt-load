@@ -160,6 +160,7 @@ export const keysApi = {
       },
       {
         hideMessage: true,
+        timeout: 300000,
       }
     );
     return res.data;

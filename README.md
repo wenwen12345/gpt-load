@@ -407,10 +407,11 @@ Configure **Proxy Keys** in the web management interface, which supports system-
 
 ### 3. OpenAI Interface Example
 
-GPT-Load currently supports two OpenAI-compatible group types:
+GPT-Load currently supports three OpenAI-compatible group types:
 
 - `openai` (OpenAI Chat Completions format)
 - `openai-response` (OpenAI Responses format)
+- `openai-image-generation` (OpenAI Images format)
 
 Assuming a group named `openai` was created:
 
@@ -444,6 +445,15 @@ curl -X POST http://localhost:3001/proxy/openai-response/v1/responses \
   -H "Authorization: Bearer your-proxy-key" \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-4.1-mini", "input": "Hello"}'
+```
+
+**OpenAI Images format example (`openai-image-generation` group):**
+
+```bash
+curl -X POST http://localhost:3001/proxy/openai-image-generation/v1/images/generations \
+  -H "Authorization: Bearer your-proxy-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-image-2", "prompt": "cat"}'
 ```
 
 ### 4. Gemini Interface Example
@@ -515,6 +525,11 @@ curl -X POST http://localhost:3001/proxy/anthropic/v1/messages \
 - `/v1/responses` - Unified response generation
 - `/v1/models` - Model list
 - And all other OpenAI Responses-compatible interfaces
+
+**OpenAI Images Format (`openai-image-generation`):**
+
+- `/v1/images/generations` - Image generation
+- `/v1/images/edits` - Image editing
 
 **Gemini Format:**
 

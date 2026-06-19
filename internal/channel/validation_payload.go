@@ -18,6 +18,13 @@ func buildOpenAIValidationPayload(endpointPath, model string) map[string]any {
 	}
 }
 
+func buildOpenAIImageGenerationValidationPayload(model string) map[string]any {
+	return map[string]any{
+		"model":  model,
+		"prompt": "cat",
+	}
+}
+
 func buildGeminiNativeValidationPayload() map[string]any {
 	return map[string]any{
 		"contents": []map[string]any{

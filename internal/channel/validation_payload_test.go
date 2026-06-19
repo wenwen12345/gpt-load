@@ -6,6 +6,17 @@ import (
 	"testing"
 )
 
+func TestRegisteredChannelsIncludesOpenAIImageGeneration(t *testing.T) {
+	channels := GetChannels()
+	for _, channelType := range channels {
+		if channelType == "openai-image-generation" {
+			return
+		}
+	}
+
+	t.Fatalf("expected openai-image-generation to be registered, got %#v", channels)
+}
+
 func TestBuildOpenAIValidationPayloadUsesResponsesFormat(t *testing.T) {
 	payload := buildOpenAIValidationPayload("/v1/responses", "gpt-5.5")
 
@@ -35,6 +46,23 @@ func TestBuildOpenAIValidationPayloadUsesChatCompletionsFormat(t *testing.T) {
 	}
 	if messages[0]["role"] != "user" || messages[0]["content"] != "hi" {
 		t.Fatalf("unexpected message payload: %#v", messages[0])
+	}
+}
+
+func TestBuildOpenAIImageGenerationValidationPayloadUsesPrompt(t *testing.T) {
+	payload := buildOpenAIImageGenerationValidationPayload("gpt-image-2")
+
+	if payload["model"] != "gpt-image-2" {
+		t.Fatalf("unexpected model: %v", payload["model"])
+	}
+	if payload["prompt"] != "cat" {
+		t.Fatalf("expected image generation prompt cat, got %v", payload["prompt"])
+	}
+	if _, exists := payload["messages"]; exists {
+		t.Fatal("Image generation validation payload must not include messages")
+	}
+	if _, exists := payload["input"]; exists {
+		t.Fatal("Image generation validation payload must not include input")
 	}
 }
 

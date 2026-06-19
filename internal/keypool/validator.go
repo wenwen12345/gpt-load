@@ -14,6 +14,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const openAIImageGenerationValidationTimeoutSeconds = 300
+
 // KeyTestResult holds the validation result for a single key.
 type KeyTestResult struct {
 	KeyValue string `json:"key_value"`
@@ -55,7 +57,7 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 	if group.EffectiveConfig.AppUrl == "" {
 		group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(group.EffectiveConfig.KeyValidationTimeoutSeconds)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), keyValidationTimeout(group))
 	defer cancel()
 
 	ch, err := s.channelFactory.GetChannel(group)
@@ -86,6 +88,14 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 	}).Debug("Key validation successful")
 
 	return true, nil
+}
+
+func keyValidationTimeout(group *models.Group) time.Duration {
+	timeoutSeconds := group.EffectiveConfig.KeyValidationTimeoutSeconds
+	if group.ChannelType == "openai-image-generation" && timeoutSeconds < openAIImageGenerationValidationTimeoutSeconds {
+		timeoutSeconds = openAIImageGenerationValidationTimeoutSeconds
+	}
+	return time.Duration(timeoutSeconds) * time.Second
 }
 
 // TestMultipleKeys performs a synchronous validation for a list of key values within a specific group.

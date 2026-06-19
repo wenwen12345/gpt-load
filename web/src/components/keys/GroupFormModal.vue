@@ -2,7 +2,7 @@
 import { keysApi } from "@/api/keys";
 import { settingsApi } from "@/api/settings";
 import ProxyKeysInput from "@/components/common/ProxyKeysInput.vue";
-import type { Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
+import type { ChannelType, Group, GroupConfigOption, UpstreamInfo } from "@/types/models";
 import { Add, Close, HelpCircleOutline, Remove } from "@vicons/ionicons5";
 import {
   NButton,
@@ -60,6 +60,7 @@ const modelRedirectTip = `{
   "gpt-5": "gpt-5-2025-08-07",
   "gemini-2.5-flash": "gemini-2.5-flash-preview-09-2025"
 }`;
+const imageGenerationKeyValidationTimeoutSeconds = 300;
 
 // 表单数据接口
 interface GroupFormData {
@@ -67,7 +68,7 @@ interface GroupFormData {
   display_name: string;
   description: string;
   upstreams: UpstreamInfo[];
-  channel_type: "anthropic" | "gemini" | "openai" | "openai-response";
+  channel_type: ChannelType;
   sort: number;
   test_model: string;
   validation_endpoint: string;
@@ -123,6 +124,8 @@ const testModelPlaceholder = computed(() => {
     case "openai":
     case "openai-response":
       return "gpt-4.1-nano";
+    case "openai-image-generation":
+      return "gpt-image-2";
     case "gemini":
       return "gemini-2.0-flash-lite";
     case "anthropic":
@@ -136,6 +139,7 @@ const upstreamPlaceholder = computed(() => {
   switch (formData.channel_type) {
     case "openai":
     case "openai-response":
+    case "openai-image-generation":
       return "https://api.openai.com";
     case "gemini":
       return "https://generativelanguage.googleapis.com";
@@ -152,6 +156,8 @@ const validationEndpointPlaceholder = computed(() => {
       return "/v1/chat/completions";
     case "openai-response":
       return "/v1/responses";
+    case "openai-image-generation":
+      return "/v1/images/generations";
     case "anthropic":
       return "/v1/messages";
     case "gemini":
@@ -252,6 +258,8 @@ function getOldDefaultTestModel(channelType: string): string {
     case "openai":
     case "openai-response":
       return "gpt-4.1-nano";
+    case "openai-image-generation":
+      return "gpt-image-2";
     case "gemini":
       return "gemini-2.0-flash-lite";
     case "anthropic":
@@ -265,6 +273,7 @@ function getOldDefaultUpstream(channelType: string): string {
   switch (channelType) {
     case "openai":
     case "openai-response":
+    case "openai-image-generation":
       return "https://api.openai.com";
     case "gemini":
       return "https://generativelanguage.googleapis.com";
@@ -516,6 +525,13 @@ async function handleSubmit() {
         }
       }
     });
+    if (
+      !props.group &&
+      formData.channel_type === "openai-image-generation" &&
+      !("key_validation_timeout_seconds" in config)
+    ) {
+      config.key_validation_timeout_seconds = imageGenerationKeyValidationTimeoutSeconds;
+    }
 
     // 构建提交数据
     const submitData = {
