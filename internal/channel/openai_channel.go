@@ -91,13 +91,8 @@ func (ch *OpenAIChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey,
 	finalURL.RawQuery = endpointURL.RawQuery
 	reqURL := finalURL.String()
 
-	// Use a minimal, low-cost payload for validation
-	payload := gin.H{
-		"model": ch.TestModel,
-		"messages": []gin.H{
-			{"role": "user", "content": "hi"},
-		},
-	}
+	// Use a minimal, low-cost payload matching the validation endpoint format.
+	payload := buildOpenAIValidationPayload(endpointURL.Path, ch.TestModel)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal validation payload: %w", err)

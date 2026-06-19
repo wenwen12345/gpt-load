@@ -92,14 +92,8 @@ func (ch *AnthropicChannel) ValidateKey(ctx context.Context, apiKey *models.APIK
 	finalURL.RawQuery = endpointURL.RawQuery
 	reqURL := finalURL.String()
 
-	// Use a minimal, low-cost payload for validation
-	payload := gin.H{
-		"model":      ch.TestModel,
-		"max_tokens": 100,
-		"messages": []gin.H{
-			{"role": "user", "content": "hi"},
-		},
-	}
+	// Use a minimal payload matching the Anthropic Messages API format.
+	payload := buildAnthropicValidationPayload(ch.TestModel)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal validation payload: %w", err)

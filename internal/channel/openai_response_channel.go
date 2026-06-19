@@ -86,10 +86,7 @@ func (ch *OpenAIResponseChannel) ValidateKey(ctx context.Context, apiKey *models
 	finalURL.RawQuery = endpointURL.RawQuery
 	reqURL := finalURL.String()
 
-	payload := gin.H{
-		"model": ch.TestModel,
-		"input": "hi",
-	}
+	payload := buildOpenAIValidationPayload(endpointURL.Path, ch.TestModel)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal validation payload: %w", err)

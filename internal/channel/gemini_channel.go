@@ -98,27 +98,9 @@ func (ch *GeminiChannel) ExtractModel(c *gin.Context, bodyBytes []byte) string {
 
 // ValidateKey checks if the given API key is valid by making a generateContent request.
 func (ch *GeminiChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey, group *models.Group) (bool, error) {
-	upstreamURL := ch.getUpstreamURL()
-	if upstreamURL == nil {
-		return false, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
-	}
-
-	// Safely join the path segments
-	reqURL, err := url.JoinPath(upstreamURL.String(), "v1beta", "models", ch.TestModel+":generateContent")
+	reqURL, payload, authMode, err := ch.buildValidationRequest(apiKey)
 	if err != nil {
-		return false, fmt.Errorf("failed to create gemini validation path: %w", err)
-	}
-	reqURL += "?key=" + apiKey.KeyValue
-
-	payload := gin.H{
-		"contents": []gin.H{
-			{
-				"role": "user",
-				"parts": []gin.H{
-					{"text": "hi"},
-				},
-			},
-		},
+		return false, err
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -130,6 +112,9 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey,
 		return false, fmt.Errorf("failed to create validation request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if authMode == "bearer" {
+		req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
+	}
 
 	// Apply custom header rules if available
 	if len(group.HeaderRuleList) > 0 {
@@ -158,6 +143,33 @@ func (ch *GeminiChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey,
 	parsedError := app_errors.ParseUpstreamError(errorBody)
 
 	return false, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
+}
+
+func (ch *GeminiChannel) buildValidationRequest(apiKey *models.APIKey) (string, map[string]any, string, error) {
+	upstreamURL := ch.getUpstreamURL()
+	if upstreamURL == nil {
+		return "", nil, "", fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
+	}
+
+	endpointURL, err := url.Parse(ch.ValidationEndpoint)
+	if err != nil {
+		return "", nil, "", fmt.Errorf("failed to parse validation endpoint: %w", err)
+	}
+
+	if isGeminiOpenAICompatibleEndpoint(endpointURL.Path) {
+		finalURL := *upstreamURL
+		finalURL.Path = strings.TrimRight(finalURL.Path, "/") + endpointURL.Path
+		finalURL.RawQuery = endpointURL.RawQuery
+		return finalURL.String(), buildOpenAIValidationPayload(endpointURL.Path, ch.TestModel), "bearer", nil
+	}
+
+	reqURL, err := url.JoinPath(upstreamURL.String(), "v1beta", "models", ch.TestModel+":generateContent")
+	if err != nil {
+		return "", nil, "", fmt.Errorf("failed to create gemini validation path: %w", err)
+	}
+	reqURL += "?key=" + apiKey.KeyValue
+
+	return reqURL, buildGeminiNativeValidationPayload(), "query", nil
 }
 
 // ApplyModelRedirect overrides the default implementation for Gemini channel.
