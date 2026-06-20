@@ -26,7 +26,7 @@ export interface APIKey {
   key_value: string;
   notes?: string;
   status: KeyStatus;
-  openai_tier?: string;
+  openai_tier: string;
   request_count: number;
   failure_count: number;
   last_used_at?: string;

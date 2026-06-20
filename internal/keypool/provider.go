@@ -101,26 +101,30 @@ func channelValidationResult(isSuccess bool) channel.KeyValidationResult {
 // UpdateValidationResult asynchronously persists a key validation result.
 func (p *KeyProvider) UpdateValidationResult(apiKey *models.APIKey, group *models.Group, validationResult channel.KeyValidationResult, errorMessage string) {
 	go func() {
-		keyHashKey := fmt.Sprintf("key:%d", apiKey.ID)
-		activeKeysListKey := fmt.Sprintf("group:%d:active_keys", group.ID)
-
-		if validationResult.IsValid {
-			if err := p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey, validationResult); err != nil {
-				logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to handle key success")
-			}
-		} else {
-			if app_errors.IsUnCounted(errorMessage) {
-				logrus.WithFields(logrus.Fields{
-					"keyID": apiKey.ID,
-					"error": errorMessage,
-				}).Debug("Uncounted error, skipping failure handling")
-			} else {
-				if err := p.handleFailure(apiKey, group, keyHashKey, activeKeysListKey); err != nil {
-					logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to handle key failure")
-				}
-			}
+		if err := p.ApplyValidationResult(apiKey, group, validationResult, errorMessage); err != nil {
+			logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to persist key validation result")
 		}
 	}()
+}
+
+// ApplyValidationResult synchronously persists a key validation result.
+func (p *KeyProvider) ApplyValidationResult(apiKey *models.APIKey, group *models.Group, validationResult channel.KeyValidationResult, errorMessage string) error {
+	keyHashKey := fmt.Sprintf("key:%d", apiKey.ID)
+	activeKeysListKey := fmt.Sprintf("group:%d:active_keys", group.ID)
+
+	if validationResult.IsValid {
+		return p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey, validationResult)
+	}
+
+	if app_errors.IsUnCounted(errorMessage) {
+		logrus.WithFields(logrus.Fields{
+			"keyID": apiKey.ID,
+			"error": errorMessage,
+		}).Debug("Uncounted error, skipping failure handling")
+		return nil
+	}
+
+	return p.handleFailure(apiKey, group, keyHashKey, activeKeysListKey)
 }
 
 // executeTransactionWithRetry wraps a database transaction with a retry mechanism.
@@ -151,105 +155,118 @@ func (p *KeyProvider) executeTransactionWithRetry(operation func(tx *gorm.DB) er
 }
 
 func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey string, validationResult channel.KeyValidationResult) error {
-	keyDetails, err := p.store.HGetAll(keyHashKey)
-	if err != nil {
-		return fmt.Errorf("failed to get key details from store: %w", err)
-	}
+	var updatedKey models.APIKey
+	var wasInactive bool
 
-	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
-	isActive := keyDetails["status"] == models.KeyStatusActive
-	existingOpenAITier := keyDetails["openai_tier"]
-	shouldUpdateOpenAITier := validationResult.OpenAITierUpdated && existingOpenAITier != validationResult.OpenAITier
-
-	if failureCount == 0 && isActive && !shouldUpdateOpenAITier {
-		return nil
-	}
-
-	return p.executeTransactionWithRetry(func(tx *gorm.DB) error {
+	if err := p.executeTransactionWithRetry(func(tx *gorm.DB) error {
 		var key models.APIKey
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&key, keyID).Error; err != nil {
 			return fmt.Errorf("failed to lock key %d for update: %w", keyID, err)
 		}
 
-		updates := map[string]any{"failure_count": 0}
-		if !isActive {
+		updates := map[string]any{}
+		if key.FailureCount != 0 {
+			updates["failure_count"] = 0
+			key.FailureCount = 0
+		}
+		if key.Status != models.KeyStatusActive {
 			updates["status"] = models.KeyStatusActive
+			key.Status = models.KeyStatusActive
+			wasInactive = true
 		}
-		if validationResult.OpenAITierUpdated {
+
+		if validationResult.OpenAITierUpdated && validationResult.OpenAITier != "" && key.OpenAITier != validationResult.OpenAITier {
 			updates["openai_tier"] = validationResult.OpenAITier
+			key.OpenAITier = validationResult.OpenAITier
 		}
 
-		if err := tx.Model(&key).Updates(updates).Error; err != nil {
-			return fmt.Errorf("failed to update key in DB: %w", err)
-		}
-
-		if err := p.store.HSet(keyHashKey, updates); err != nil {
-			return fmt.Errorf("failed to update key details in store: %w", err)
-		}
-
-		if !isActive {
-			logrus.WithField("keyID", keyID).Debug("Key has recovered and is being restored to active pool.")
-			if err := p.store.LRem(activeKeysListKey, 0, keyID); err != nil {
-				return fmt.Errorf("failed to LRem key before LPush on recovery: %w", err)
-			}
-			if err := p.store.LPush(activeKeysListKey, keyID); err != nil {
-				return fmt.Errorf("failed to LPush key back to active list: %w", err)
+		if len(updates) > 0 {
+			if err := tx.Model(&key).Updates(updates).Error; err != nil {
+				return fmt.Errorf("failed to update key in DB: %w", err)
 			}
 		}
 
+		updatedKey = key
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	if updatedKey.ID == 0 {
+		return nil
+	}
+
+	if err := p.store.HSet(keyHashKey, p.apiKeyToMap(&updatedKey)); err != nil {
+		logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Warn("Failed to sync successful key validation to store")
+	}
+
+	if wasInactive {
+		logrus.WithField("keyID", keyID).Debug("Key has recovered and is being restored to active pool.")
+		if err := p.store.LRem(activeKeysListKey, 0, keyID); err != nil {
+			logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Warn("Failed to remove duplicate key before active pool restore")
+		}
+		if err := p.store.LPush(activeKeysListKey, keyID); err != nil {
+			logrus.WithFields(logrus.Fields{"keyID": keyID, "error": err}).Warn("Failed to restore key to active pool")
+		}
+	}
+
+	return nil
 }
 
 func (p *KeyProvider) handleFailure(apiKey *models.APIKey, group *models.Group, keyHashKey, activeKeysListKey string) error {
-	keyDetails, err := p.store.HGetAll(keyHashKey)
-	if err != nil {
-		return fmt.Errorf("failed to get key details from store: %w", err)
-	}
-
-	if keyDetails["status"] == models.KeyStatusInvalid {
-		return nil
-	}
-
-	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
-
 	// 获取该分组的有效配置
 	blacklistThreshold := group.EffectiveConfig.BlacklistThreshold
 
-	return p.executeTransactionWithRetry(func(tx *gorm.DB) error {
+	var updatedKey models.APIKey
+	var shouldBlacklist bool
+
+	if err := p.executeTransactionWithRetry(func(tx *gorm.DB) error {
 		var key models.APIKey
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&key, apiKey.ID).Error; err != nil {
 			return fmt.Errorf("failed to lock key %d for update: %w", apiKey.ID, err)
 		}
 
-		newFailureCount := failureCount + 1
+		if key.Status == models.KeyStatusInvalid {
+			updatedKey = key
+			return nil
+		}
+
+		newFailureCount := key.FailureCount + 1
 
 		updates := map[string]any{"failure_count": newFailureCount}
-		shouldBlacklist := blacklistThreshold > 0 && newFailureCount >= int64(blacklistThreshold)
+		key.FailureCount = newFailureCount
+		shouldBlacklist = blacklistThreshold > 0 && newFailureCount >= int64(blacklistThreshold)
 		if shouldBlacklist {
 			updates["status"] = models.KeyStatusInvalid
+			key.Status = models.KeyStatusInvalid
 		}
 
 		if err := tx.Model(&key).Updates(updates).Error; err != nil {
 			return fmt.Errorf("failed to update key stats in DB: %w", err)
 		}
 
-		if _, err := p.store.HIncrBy(keyHashKey, "failure_count", 1); err != nil {
-			return fmt.Errorf("failed to increment failure count in store: %w", err)
-		}
-
-		if shouldBlacklist {
-			logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "threshold": blacklistThreshold}).Warn("Key has reached blacklist threshold, disabling.")
-			if err := p.store.LRem(activeKeysListKey, 0, apiKey.ID); err != nil {
-				return fmt.Errorf("failed to LRem key from active list: %w", err)
-			}
-			if err := p.store.HSet(keyHashKey, map[string]any{"status": models.KeyStatusInvalid}); err != nil {
-				return fmt.Errorf("failed to update key status to invalid in store: %w", err)
-			}
-		}
-
+		updatedKey = key
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	if updatedKey.ID == 0 || updatedKey.Status == models.KeyStatusInvalid && !shouldBlacklist {
+		return nil
+	}
+
+	if err := p.store.HSet(keyHashKey, p.apiKeyToMap(&updatedKey)); err != nil {
+		logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Warn("Failed to sync failed key validation to store")
+	}
+
+	if shouldBlacklist {
+		logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "threshold": blacklistThreshold}).Warn("Key has reached blacklist threshold, disabling.")
+		if err := p.store.LRem(activeKeysListKey, 0, apiKey.ID); err != nil {
+			logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Warn("Failed to remove blacklisted key from active pool")
+		}
+	}
+
+	return nil
 }
 
 // LoadKeysFromDB 从数据库加载所有分组和密钥，并填充到 Store 中。

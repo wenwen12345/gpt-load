@@ -263,10 +263,10 @@ async function testKey(_key: KeyRow) {
       });
     }
     await loadKeys();
-    if (curValid.is_valid && curValid.openai_tier_updated) {
+    if (curValid.is_valid && curValid.openai_tier) {
       const refreshedKey = keys.value.find(key => key.id === _key.id);
       if (refreshedKey) {
-        refreshedKey.openai_tier = curValid.openai_tier || "";
+        refreshedKey.openai_tier = curValid.openai_tier;
       }
     }
     // 触发同步操作刷新

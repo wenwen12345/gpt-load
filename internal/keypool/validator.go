@@ -74,7 +74,7 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 
 	validationResult, validationErr := ch.ValidateKey(ctx, key, group)
 	isValid := validationResult.IsValid
-	if validationResult.OpenAITierUpdated {
+	if validationResult.OpenAITierUpdated && validationResult.OpenAITier != "" {
 		key.OpenAITier = validationResult.OpenAITier
 	}
 
@@ -82,7 +82,16 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 	if !isValid && validationErr != nil {
 		errorMsg = validationErr.Error()
 	}
-	s.keypoolProvider.UpdateValidationResult(key, group, validationResult, errorMsg)
+	if err := s.keypoolProvider.ApplyValidationResult(key, group, validationResult, errorMsg); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"error":    err,
+			"key_id":   key.ID,
+			"group_id": group.ID,
+		}).Error("Failed to persist key validation result")
+		if isValid {
+			return validationResult, fmt.Errorf("failed to persist key validation result: %w", err)
+		}
+	}
 
 	if !isValid {
 		logrus.WithFields(logrus.Fields{
