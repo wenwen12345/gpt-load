@@ -2,6 +2,7 @@ package channel
 
 import (
 	"gpt-load/internal/models"
+	"net/http"
 	"net/url"
 	"testing"
 )
@@ -63,6 +64,53 @@ func TestBuildOpenAIImageGenerationValidationPayloadUsesPrompt(t *testing.T) {
 	}
 	if _, exists := payload["input"]; exists {
 		t.Fatal("Image generation validation payload must not include input")
+	}
+}
+
+func TestInferOpenAITierFromHeaders(t *testing.T) {
+	tests := []struct {
+		name     string
+		model    string
+		requests string
+		tokens   string
+		want     string
+	}{
+		{name: "gpt 4.1 tier 1", model: "gpt-4.1", requests: "500", tokens: "30000", want: "T1"},
+		{name: "gpt 4.1 tier 2", model: "gpt-4.1-2025-04-14", requests: "5,000", tokens: "450,000", want: "T2"},
+		{name: "gpt 4.1 nano tier 5", model: "gpt-4.1-nano", requests: "30000", tokens: "150000000", want: "T5"},
+		{name: "gpt 5 tier 3 conflicting pair", model: "gpt-5", requests: "5000", tokens: "2000000", want: "T3"},
+		{name: "gpt 5 mini tier 5", model: "gpt-5-mini", requests: "30000", tokens: "180000000", want: "T5"},
+		{name: "unknown model unambiguous pair", model: "custom-model", requests: "500", tokens: "30000", want: "T1"},
+		{name: "unknown model conflicting pair", model: "custom-model", requests: "5000", tokens: "2000000", want: ""},
+		{name: "unknown pair", model: "gpt-4.1", requests: "123", tokens: "456", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := http.Header{}
+			headers.Set("x-ratelimit-limit-requests", tt.requests)
+			headers.Set("x-ratelimit-limit-tokens", tt.tokens)
+
+			if got := inferOpenAITierFromHeaders(tt.model, headers); got != tt.want {
+				t.Fatalf("unexpected tier: got %q want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildOpenAIValidationResultOnlyUpdatesOfficialOpenAIAPI(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("x-ratelimit-limit-requests", "500")
+	headers.Set("x-ratelimit-limit-tokens", "200000")
+
+	official := buildOpenAIValidationResult(mustParseURL(t, "https://api.openai.com/v1/chat/completions"), "gpt-4.1-nano", headers)
+	if !official.IsValid || !official.OpenAITierUpdated || official.OpenAITier != "T1" {
+		t.Fatalf("unexpected official result: %#v", official)
+	}
+
+	compatible := buildOpenAIValidationResult(mustParseURL(t, "https://example.com/v1/chat/completions"), "gpt-4.1-nano", headers)
+	if !compatible.IsValid || compatible.OpenAITierUpdated || compatible.OpenAITier != "" {
+		t.Fatalf("unexpected compatible result: %#v", compatible)
 	}
 }
 

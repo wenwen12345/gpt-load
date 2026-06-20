@@ -3,6 +3,7 @@ package keypool
 import (
 	"errors"
 	"fmt"
+	"gpt-load/internal/channel"
 	"gpt-load/internal/config"
 	"gpt-load/internal/encryption"
 	app_errors "gpt-load/internal/errors"
@@ -79,6 +80,7 @@ func (p *KeyProvider) SelectKey(groupID uint) (*models.APIKey, error) {
 		ID:           uint(keyID),
 		KeyValue:     decryptedKeyValue,
 		Status:       keyDetails["status"],
+		OpenAITier:   keyDetails["openai_tier"],
 		FailureCount: failureCount,
 		GroupID:      groupID,
 		CreatedAt:    time.Unix(createdAt, 0),
@@ -89,12 +91,21 @@ func (p *KeyProvider) SelectKey(groupID uint) (*models.APIKey, error) {
 
 // UpdateStatus 异步地提交一个 Key 状态更新任务。
 func (p *KeyProvider) UpdateStatus(apiKey *models.APIKey, group *models.Group, isSuccess bool, errorMessage string) {
+	p.UpdateValidationResult(apiKey, group, channelValidationResult(isSuccess), errorMessage)
+}
+
+func channelValidationResult(isSuccess bool) channel.KeyValidationResult {
+	return channel.KeyValidationResult{IsValid: isSuccess}
+}
+
+// UpdateValidationResult asynchronously persists a key validation result.
+func (p *KeyProvider) UpdateValidationResult(apiKey *models.APIKey, group *models.Group, validationResult channel.KeyValidationResult, errorMessage string) {
 	go func() {
 		keyHashKey := fmt.Sprintf("key:%d", apiKey.ID)
 		activeKeysListKey := fmt.Sprintf("group:%d:active_keys", group.ID)
 
-		if isSuccess {
-			if err := p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey); err != nil {
+		if validationResult.IsValid {
+			if err := p.handleSuccess(apiKey.ID, keyHashKey, activeKeysListKey, validationResult); err != nil {
 				logrus.WithFields(logrus.Fields{"keyID": apiKey.ID, "error": err}).Error("Failed to handle key success")
 			}
 		} else {
@@ -139,7 +150,7 @@ func (p *KeyProvider) executeTransactionWithRetry(operation func(tx *gorm.DB) er
 	return err
 }
 
-func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey string) error {
+func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey string, validationResult channel.KeyValidationResult) error {
 	keyDetails, err := p.store.HGetAll(keyHashKey)
 	if err != nil {
 		return fmt.Errorf("failed to get key details from store: %w", err)
@@ -147,8 +158,10 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 
 	failureCount, _ := strconv.ParseInt(keyDetails["failure_count"], 10, 64)
 	isActive := keyDetails["status"] == models.KeyStatusActive
+	existingOpenAITier := keyDetails["openai_tier"]
+	shouldUpdateOpenAITier := validationResult.OpenAITierUpdated && existingOpenAITier != validationResult.OpenAITier
 
-	if failureCount == 0 && isActive {
+	if failureCount == 0 && isActive && !shouldUpdateOpenAITier {
 		return nil
 	}
 
@@ -161,6 +174,9 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 		updates := map[string]any{"failure_count": 0}
 		if !isActive {
 			updates["status"] = models.KeyStatusActive
+		}
+		if validationResult.OpenAITierUpdated {
+			updates["openai_tier"] = validationResult.OpenAITier
 		}
 
 		if err := tx.Model(&key).Updates(updates).Error; err != nil {
@@ -634,6 +650,7 @@ func (p *KeyProvider) apiKeyToMap(key *models.APIKey) map[string]any {
 		"id":            fmt.Sprint(key.ID),
 		"key_string":    key.KeyValue,
 		"status":        key.Status,
+		"openai_tier":   key.OpenAITier,
 		"failure_count": key.FailureCount,
 		"group_id":      key.GroupID,
 		"created_at":    key.CreatedAt.Unix(),

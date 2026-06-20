@@ -121,6 +121,7 @@ type APIKey struct {
 	KeyHash      string     `gorm:"type:varchar(128);index" json:"key_hash"`
 	GroupID      uint       `gorm:"not null;index;index:idx_api_keys_group_last_used_id,priority:1" json:"group_id"`
 	Status       string     `gorm:"type:varchar(50);not null;default:'active';index" json:"status"`
+	OpenAITier   string     `gorm:"type:varchar(10);default:''" json:"openai_tier,omitempty"`
 	Notes        string     `gorm:"type:varchar(255);default:''" json:"notes"`
 	RequestCount int64      `gorm:"not null;default:0" json:"request_count"`
 	FailureCount int64      `gorm:"not null;default:0" json:"failure_count"`

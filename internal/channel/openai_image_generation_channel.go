@@ -54,15 +54,15 @@ func (ch *OpenAIImageGenerationChannel) ExtractModel(c *gin.Context, bodyBytes [
 	return ""
 }
 
-func (ch *OpenAIImageGenerationChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey, group *models.Group) (bool, error) {
+func (ch *OpenAIImageGenerationChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey, group *models.Group) (KeyValidationResult, error) {
 	upstreamURL := ch.getUpstreamURL()
 	if upstreamURL == nil {
-		return false, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
+		return KeyValidationResult{}, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
 	}
 
 	endpointURL, err := url.Parse(ch.ValidationEndpoint)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse validation endpoint: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to parse validation endpoint: %w", err)
 	}
 
 	finalURL := *upstreamURL
@@ -73,12 +73,12 @@ func (ch *OpenAIImageGenerationChannel) ValidateKey(ctx context.Context, apiKey 
 	payload := buildOpenAIImageGenerationValidationPayload(ch.TestModel)
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return false, fmt.Errorf("failed to marshal validation payload: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to marshal validation payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewBuffer(body))
 	if err != nil {
-		return false, fmt.Errorf("failed to create validation request: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to create validation request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey.KeyValue)
 	req.Header.Set("Content-Type", "application/json")
@@ -90,20 +90,20 @@ func (ch *OpenAIImageGenerationChannel) ValidateKey(ctx context.Context, apiKey 
 
 	resp, err := ch.HTTPClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("failed to send validation request: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to send validation request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return true, nil
+		return buildOpenAIValidationResult(&finalURL, ch.TestModel, resp.Header), nil
 	}
 
 	errorBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("key is invalid (status %d), but failed to read error body: %w", resp.StatusCode, err)
+		return KeyValidationResult{}, fmt.Errorf("key is invalid (status %d), but failed to read error body: %w", resp.StatusCode, err)
 	}
 
 	parsedError := app_errors.ParseUpstreamError(errorBody)
 
-	return false, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
+	return KeyValidationResult{}, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
 }

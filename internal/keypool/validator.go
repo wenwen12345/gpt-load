@@ -18,9 +18,11 @@ const openAIImageGenerationValidationTimeoutSeconds = 300
 
 // KeyTestResult holds the validation result for a single key.
 type KeyTestResult struct {
-	KeyValue string `json:"key_value"`
-	IsValid  bool   `json:"is_valid"`
-	Error    string `json:"error,omitempty"`
+	KeyValue          string `json:"key_value"`
+	IsValid           bool   `json:"is_valid"`
+	OpenAITier        string `json:"openai_tier,omitempty"`
+	OpenAITierUpdated bool   `json:"openai_tier_updated,omitempty"`
+	Error             string `json:"error,omitempty"`
 }
 
 // KeyValidator provides methods to validate API keys.
@@ -53,7 +55,7 @@ func NewKeyValidator(params KeyValidatorParams) *KeyValidator {
 }
 
 // ValidateSingleKey performs a validation check on a single API key.
-func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group) (bool, error) {
+func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group) (channel.KeyValidationResult, error) {
 	if group.EffectiveConfig.AppUrl == "" {
 		group.EffectiveConfig = s.SettingsManager.GetEffectiveConfig(group.Config)
 	}
@@ -62,16 +64,20 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 
 	ch, err := s.channelFactory.GetChannel(group)
 	if err != nil {
-		return false, fmt.Errorf("failed to get channel for group %s: %w", group.Name, err)
+		return channel.KeyValidationResult{}, fmt.Errorf("failed to get channel for group %s: %w", group.Name, err)
 	}
 
-	isValid, validationErr := ch.ValidateKey(ctx, key, group)
+	validationResult, validationErr := ch.ValidateKey(ctx, key, group)
+	isValid := validationResult.IsValid
+	if validationResult.OpenAITierUpdated {
+		key.OpenAITier = validationResult.OpenAITier
+	}
 
 	var errorMsg string
 	if !isValid && validationErr != nil {
 		errorMsg = validationErr.Error()
 	}
-	s.keypoolProvider.UpdateStatus(key, group, isValid, errorMsg)
+	s.keypoolProvider.UpdateValidationResult(key, group, validationResult, errorMsg)
 
 	if !isValid {
 		logrus.WithFields(logrus.Fields{
@@ -79,7 +85,7 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 			"key_id":   key.ID,
 			"group_id": group.ID,
 		}).Debug("Key validation failed")
-		return false, validationErr
+		return validationResult, validationErr
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -87,7 +93,7 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 		"is_valid": isValid,
 	}).Debug("Key validation successful")
 
-	return true, nil
+	return validationResult, nil
 }
 
 func keyValidationTimeout(group *models.Group) time.Duration {
@@ -140,12 +146,14 @@ func (s *KeyValidator) TestMultipleKeys(group *models.Group, keyValues []string)
 
 		apiKey.KeyValue = kv
 
-		isValid, validationErr := s.ValidateSingleKey(&apiKey, group)
+		validationResult, validationErr := s.ValidateSingleKey(&apiKey, group)
 
 		results[i] = KeyTestResult{
-			KeyValue: kv,
-			IsValid:  isValid,
-			Error:    "",
+			KeyValue:          kv,
+			IsValid:           validationResult.IsValid,
+			OpenAITier:        apiKey.OpenAITier,
+			OpenAITierUpdated: validationResult.OpenAITierUpdated,
+			Error:             "",
 		}
 		if validationErr != nil {
 			results[i].Error = validationErr.Error()

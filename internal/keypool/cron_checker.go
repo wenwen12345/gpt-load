@@ -159,8 +159,8 @@ func (s *CronChecker) validateGroupKeys(group *models.Group) {
 					keyForValidation := *key
 					keyForValidation.KeyValue = decryptedKey
 
-					isValid, _ := s.Validator.ValidateSingleKey(&keyForValidation, group)
-					if isValid {
+					validationResult, _ := s.Validator.ValidateSingleKey(&keyForValidation, group)
+					if validationResult.IsValid {
 						atomic.AddInt32(&becameValidCount, 1)
 					}
 				case <-s.stopChan:

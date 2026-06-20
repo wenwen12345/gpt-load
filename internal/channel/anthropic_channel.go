@@ -74,16 +74,16 @@ func (ch *AnthropicChannel) ExtractModel(c *gin.Context, bodyBytes []byte) strin
 }
 
 // ValidateKey checks if the given API key is valid by making a messages request.
-func (ch *AnthropicChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey, group *models.Group) (bool, error) {
+func (ch *AnthropicChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey, group *models.Group) (KeyValidationResult, error) {
 	upstreamURL := ch.getUpstreamURL()
 	if upstreamURL == nil {
-		return false, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
+		return KeyValidationResult{}, fmt.Errorf("no upstream URL configured for channel %s", ch.Name)
 	}
 
 	// Parse validation endpoint to extract path and query parameters
 	endpointURL, err := url.Parse(ch.ValidationEndpoint)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse validation endpoint: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to parse validation endpoint: %w", err)
 	}
 
 	// Build final URL with path and query parameters
@@ -96,12 +96,12 @@ func (ch *AnthropicChannel) ValidateKey(ctx context.Context, apiKey *models.APIK
 	payload := buildAnthropicValidationPayload(ch.TestModel)
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return false, fmt.Errorf("failed to marshal validation payload: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to marshal validation payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewBuffer(body))
 	if err != nil {
-		return false, fmt.Errorf("failed to create validation request: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to create validation request: %w", err)
 	}
 	req.Header.Set("x-api-key", apiKey.KeyValue)
 	req.Header.Set("anthropic-version", "2023-06-01")
@@ -115,23 +115,23 @@ func (ch *AnthropicChannel) ValidateKey(ctx context.Context, apiKey *models.APIK
 
 	resp, err := ch.HTTPClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("failed to send validation request: %w", err)
+		return KeyValidationResult{}, fmt.Errorf("failed to send validation request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Any 2xx status code indicates the key is valid.
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return true, nil
+		return KeyValidationResult{IsValid: true}, nil
 	}
 
 	// For non-200 responses, parse the body to provide a more specific error reason.
 	errorBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("key is invalid (status %d), but failed to read error body: %w", resp.StatusCode, err)
+		return KeyValidationResult{}, fmt.Errorf("key is invalid (status %d), but failed to read error body: %w", resp.StatusCode, err)
 	}
 
 	// Use the new parser to extract a clean error message.
 	parsedError := app_errors.ParseUpstreamError(errorBody)
 
-	return false, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
+	return KeyValidationResult{}, fmt.Errorf("[status %d] %s", resp.StatusCode, parsedError)
 }

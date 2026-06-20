@@ -254,6 +254,12 @@ async function testKey(_key: KeyRow) {
       });
     }
     await loadKeys();
+    if (curValid.is_valid && curValid.openai_tier_updated) {
+      const refreshedKey = keys.value.find(key => key.id === _key.id);
+      if (refreshedKey) {
+        refreshedKey.openai_tier = curValid.openai_tier || "";
+      }
+    }
     // 触发同步操作刷新
     triggerSyncOperationRefresh(props.selectedGroup.name, "TEST_SINGLE");
   } catch (_error) {
@@ -289,6 +295,10 @@ function formatDuration(ms: number): string {
 
 function toggleKeyVisibility(key: KeyRow) {
   key.is_visible = !key.is_visible;
+}
+
+function getValidStatusText(key: KeyRow): string {
+  return key.openai_tier || t("keys.validShort");
 }
 
 // 获取要显示的值（备注优先，否则显示密钥）
@@ -701,7 +711,7 @@ function resetPage() {
                   <template #icon>
                     <n-icon :component="CheckmarkCircle" />
                   </template>
-                  {{ t("keys.validShort") }}
+                  {{ getValidStatusText(key) }}
                 </n-tag>
                 <n-tag v-else :bordered="false" round>
                   <template #icon>

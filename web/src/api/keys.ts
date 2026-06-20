@@ -148,6 +148,8 @@ export const keysApi = {
     results: {
       key_value: string;
       is_valid: boolean;
+      openai_tier?: string;
+      openai_tier_updated?: boolean;
       error: string;
     }[];
     total_duration: number;
