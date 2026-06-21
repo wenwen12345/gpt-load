@@ -148,6 +148,7 @@ func TestInferAnthropicTierFromHeaders(t *testing.T) {
 		{name: "tier 2", requests: "1,000", want: "T2"},
 		{name: "tier 3", requests: "2000", want: "T3"},
 		{name: "tier 4", requests: "4000", want: "T4"},
+		{name: "custom above tier 4", requests: "10000", want: "T4"},
 		{name: "custom limit", requests: "750", want: ""},
 	}
 

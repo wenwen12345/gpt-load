@@ -6,13 +6,6 @@ import (
 	"strings"
 )
 
-var anthropicTierByRequestsLimit = map[int64]string{
-	50:   "T1",
-	1000: "T2",
-	2000: "T3",
-	4000: "T4",
-}
-
 func buildAnthropicValidationResult(endpoint *url.URL, model string, headers http.Header) KeyValidationResult {
 	result := KeyValidationResult{
 		IsValid:           true,
@@ -50,7 +43,18 @@ func inferAnthropicTierFromHeaders(headers http.Header) string {
 	if !ok {
 		return ""
 	}
-	return anthropicTierByRequestsLimit[requests]
+	switch {
+	case requests == 50:
+		return "T1"
+	case requests == 1000:
+		return "T2"
+	case requests == 2000:
+		return "T3"
+	case requests >= 4000:
+		return "T4"
+	default:
+		return ""
+	}
 }
 
 func anthropicTierReason(tier string, headers http.Header) string {
