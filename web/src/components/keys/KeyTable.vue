@@ -243,10 +243,7 @@ async function testKey(_key: KeyRow) {
     const response = await keysApi.testKeys(props.selectedGroup.id, _key.key_value);
     const curValid = response.results?.[0] || {};
     if (curValid.is_valid) {
-      const tierMessage = getOpenAITierTestMessage(
-        curValid,
-        formatDuration(response.total_duration)
-      );
+      const tierMessage = getTierTestMessage(curValid, formatDuration(response.total_duration));
       window.$message.success(
         tierMessage || t("keys.testSuccess", { duration: formatDuration(response.total_duration) }),
         {
@@ -263,10 +260,10 @@ async function testKey(_key: KeyRow) {
       });
     }
     await loadKeys();
-    if (curValid.is_valid && curValid.openai_tier) {
+    if (curValid.is_valid && curValid.tier) {
       const refreshedKey = keys.value.find(key => key.id === _key.id);
       if (refreshedKey) {
-        refreshedKey.openai_tier = curValid.openai_tier;
+        refreshedKey.tier = curValid.tier;
       }
     }
     // 触发同步操作刷新
@@ -307,43 +304,62 @@ function toggleKeyVisibility(key: KeyRow) {
 }
 
 function getValidStatusText(key: KeyRow): string {
-  return key.openai_tier || t("keys.validShort");
+  return key.tier || t("keys.validShort");
 }
 
-function getOpenAITierTestMessage(
+function getTierTestMessage(
   result: {
-    openai_tier?: string;
-    openai_tier_reason?: string;
-    openai_model?: string;
-    openai_host?: string;
-    openai_requests_limit?: string;
-    openai_tokens_limit?: string;
+    tier?: string;
+    tier_reason?: string;
+    tier_provider?: string;
+    tier_model?: string;
+    tier_host?: string;
+    requests_limit?: string;
+    tokens_limit?: string;
+    input_tokens_limit?: string;
+    output_tokens_limit?: string;
   },
   duration: string
 ): string {
-  if (!result.openai_tier_reason) {
+  const tier = result.tier;
+  const reason = result.tier_reason;
+  if (!reason) {
     return "";
   }
 
   const details = [
-    result.openai_model ? `model=${result.openai_model}` : "",
-    result.openai_host ? `host=${result.openai_host}` : "",
-    result.openai_requests_limit ? `rpm=${result.openai_requests_limit}` : "",
-    result.openai_tokens_limit ? `tpm=${result.openai_tokens_limit}` : "",
+    result.tier_model ? `model=${result.tier_model}` : "",
+    result.tier_host ? `host=${result.tier_host}` : "",
+    result.requests_limit ? `rpm=${result.requests_limit}` : "",
+    result.tokens_limit ? `tpm=${result.tokens_limit}` : "",
+    result.input_tokens_limit ? `itpm=${result.input_tokens_limit}` : "",
+    result.output_tokens_limit ? `otpm=${result.output_tokens_limit}` : "",
   ]
     .filter(Boolean)
     .join(", ");
 
-  if (result.openai_tier) {
-    const message = t("keys.testSuccessTier", { tier: result.openai_tier, duration });
+  const provider = formatTierProvider(result.tier_provider);
+  if (tier) {
+    const message = t("keys.testSuccessTier", { provider, tier, duration });
     return details ? `${message} (${details})` : message;
   }
 
   const message = t("keys.testSuccessTierMissing", {
-    reason: result.openai_tier_reason,
+    provider,
+    reason,
     duration,
   });
   return details ? `${message} (${details})` : message;
+}
+
+function formatTierProvider(provider?: string): string {
+  switch (provider) {
+    case "anthropic":
+      return "Claude";
+    case "openai":
+    default:
+      return "OpenAI";
+  }
 }
 
 // 获取要显示的值（备注优先，否则显示密钥）

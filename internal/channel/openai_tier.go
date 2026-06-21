@@ -60,15 +60,21 @@ var openAIRateLimitTiersByFamily = map[string]map[openAIRateLimitPair]string{
 func buildOpenAIValidationResult(endpoint *url.URL, model string, headers http.Header) KeyValidationResult {
 	result := KeyValidationResult{
 		IsValid:             true,
+		TierProvider:        "openai",
+		TierModel:           model,
 		OpenAIModel:         model,
 		OpenAIRequestsLimit: headers.Get("x-ratelimit-limit-requests"),
 		OpenAITokensLimit:   headers.Get("x-ratelimit-limit-tokens"),
 	}
 	if endpoint != nil {
+		result.TierHost = endpoint.Hostname()
 		result.OpenAIHost = endpoint.Hostname()
 	}
+	result.RequestsLimit = result.OpenAIRequestsLimit
+	result.TokensLimit = result.OpenAITokensLimit
 
 	if !isOfficialOpenAIAPI(endpoint) {
+		result.TierReason = "not_official_openai"
 		result.OpenAITierReason = "not_official_openai"
 		return result
 	}
@@ -76,6 +82,9 @@ func buildOpenAIValidationResult(endpoint *url.URL, model string, headers http.H
 	result.OpenAITierUpdated = true
 	result.OpenAITier = inferOpenAITierFromHeaders(model, headers)
 	result.OpenAITierReason = openAITierReason(result.OpenAITier, model, headers)
+	result.Tier = result.OpenAITier
+	result.TierUpdated = true
+	result.TierReason = result.OpenAITierReason
 	return result
 }
 

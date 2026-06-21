@@ -148,13 +148,16 @@ export const keysApi = {
     results: {
       key_value: string;
       is_valid: boolean;
-      openai_tier?: string;
-      openai_tier_updated?: boolean;
-      openai_model?: string;
-      openai_host?: string;
-      openai_requests_limit?: string;
-      openai_tokens_limit?: string;
-      openai_tier_reason?: string;
+      tier?: string;
+      tier_updated?: boolean;
+      tier_provider?: string;
+      tier_reason?: string;
+      tier_model?: string;
+      tier_host?: string;
+      requests_limit?: string;
+      tokens_limit?: string;
+      input_tokens_limit?: string;
+      output_tokens_limit?: string;
       error: string;
     }[];
     total_duration: number;

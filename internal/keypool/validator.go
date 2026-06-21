@@ -18,16 +18,19 @@ const openAIImageGenerationValidationTimeoutSeconds = 300
 
 // KeyTestResult holds the validation result for a single key.
 type KeyTestResult struct {
-	KeyValue            string `json:"key_value"`
-	IsValid             bool   `json:"is_valid"`
-	OpenAITier          string `json:"openai_tier,omitempty"`
-	OpenAITierUpdated   bool   `json:"openai_tier_updated,omitempty"`
-	OpenAIModel         string `json:"openai_model,omitempty"`
-	OpenAIHost          string `json:"openai_host,omitempty"`
-	OpenAIRequestsLimit string `json:"openai_requests_limit,omitempty"`
-	OpenAITokensLimit   string `json:"openai_tokens_limit,omitempty"`
-	OpenAITierReason    string `json:"openai_tier_reason,omitempty"`
-	Error               string `json:"error,omitempty"`
+	KeyValue          string `json:"key_value"`
+	IsValid           bool   `json:"is_valid"`
+	Tier              string `json:"tier,omitempty"`
+	TierUpdated       bool   `json:"tier_updated,omitempty"`
+	TierProvider      string `json:"tier_provider,omitempty"`
+	TierReason        string `json:"tier_reason,omitempty"`
+	TierModel         string `json:"tier_model,omitempty"`
+	TierHost          string `json:"tier_host,omitempty"`
+	RequestsLimit     string `json:"requests_limit,omitempty"`
+	TokensLimit       string `json:"tokens_limit,omitempty"`
+	InputTokensLimit  string `json:"input_tokens_limit,omitempty"`
+	OutputTokensLimit string `json:"output_tokens_limit,omitempty"`
+	Error             string `json:"error,omitempty"`
 }
 
 // KeyValidator provides methods to validate API keys.
@@ -74,6 +77,9 @@ func (s *KeyValidator) ValidateSingleKey(key *models.APIKey, group *models.Group
 
 	validationResult, validationErr := ch.ValidateKey(ctx, key, group)
 	isValid := validationResult.IsValid
+	if validationResult.TierUpdated && validationResult.Tier != "" {
+		key.Tier = validationResult.Tier
+	}
 	if validationResult.OpenAITierUpdated && validationResult.OpenAITier != "" {
 		key.OpenAITier = validationResult.OpenAITier
 	}
@@ -163,16 +169,19 @@ func (s *KeyValidator) TestMultipleKeys(group *models.Group, keyValues []string)
 		validationResult, validationErr := s.ValidateSingleKey(&apiKey, group)
 
 		results[i] = KeyTestResult{
-			KeyValue:            kv,
-			IsValid:             validationResult.IsValid,
-			OpenAITier:          apiKey.OpenAITier,
-			OpenAITierUpdated:   validationResult.OpenAITierUpdated,
-			OpenAIModel:         validationResult.OpenAIModel,
-			OpenAIHost:          validationResult.OpenAIHost,
-			OpenAIRequestsLimit: validationResult.OpenAIRequestsLimit,
-			OpenAITokensLimit:   validationResult.OpenAITokensLimit,
-			OpenAITierReason:    validationResult.OpenAITierReason,
-			Error:               "",
+			KeyValue:          kv,
+			IsValid:           validationResult.IsValid,
+			Tier:              validationResult.Tier,
+			TierUpdated:       validationResult.TierUpdated,
+			TierProvider:      validationResult.TierProvider,
+			TierReason:        validationResult.TierReason,
+			TierModel:         validationResult.TierModel,
+			TierHost:          validationResult.TierHost,
+			RequestsLimit:     validationResult.RequestsLimit,
+			TokensLimit:       validationResult.TokensLimit,
+			InputTokensLimit:  validationResult.InputTokensLimit,
+			OutputTokensLimit: validationResult.OutputTokensLimit,
+			Error:             "",
 		}
 		if validationErr != nil {
 			results[i].Error = validationErr.Error()

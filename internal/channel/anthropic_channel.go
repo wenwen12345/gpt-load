@@ -121,7 +121,7 @@ func (ch *AnthropicChannel) ValidateKey(ctx context.Context, apiKey *models.APIK
 
 	// Any 2xx status code indicates the key is valid.
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return KeyValidationResult{IsValid: true}, nil
+		return buildAnthropicValidationResult(&finalURL, ch.TestModel, resp.Header), nil
 	}
 
 	// For non-200 responses, parse the body to provide a more specific error reason.

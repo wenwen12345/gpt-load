@@ -80,6 +80,7 @@ func (p *KeyProvider) SelectKey(groupID uint) (*models.APIKey, error) {
 		ID:           uint(keyID),
 		KeyValue:     decryptedKeyValue,
 		Status:       keyDetails["status"],
+		Tier:         firstNonEmpty(keyDetails["tier"], keyDetails["openai_tier"]),
 		OpenAITier:   keyDetails["openai_tier"],
 		FailureCount: failureCount,
 		GroupID:      groupID,
@@ -175,6 +176,10 @@ func (p *KeyProvider) handleSuccess(keyID uint, keyHashKey, activeKeysListKey st
 			wasInactive = true
 		}
 
+		if validationResult.TierUpdated && validationResult.Tier != "" && key.Tier != validationResult.Tier {
+			updates["tier"] = validationResult.Tier
+			key.Tier = validationResult.Tier
+		}
 		if validationResult.OpenAITierUpdated && validationResult.OpenAITier != "" && key.OpenAITier != validationResult.OpenAITier {
 			updates["openai_tier"] = validationResult.OpenAITier
 			key.OpenAITier = validationResult.OpenAITier
@@ -667,11 +672,21 @@ func (p *KeyProvider) apiKeyToMap(key *models.APIKey) map[string]any {
 		"id":            fmt.Sprint(key.ID),
 		"key_string":    key.KeyValue,
 		"status":        key.Status,
+		"tier":          key.Tier,
 		"openai_tier":   key.OpenAITier,
 		"failure_count": key.FailureCount,
 		"group_id":      key.GroupID,
 		"created_at":    key.CreatedAt.Unix(),
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // pluckIDs extracts IDs from a slice of APIKey.

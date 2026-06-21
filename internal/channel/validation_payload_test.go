@@ -107,12 +107,14 @@ func TestBuildOpenAIValidationResultOnlyUpdatesOfficialOpenAIAPI(t *testing.T) {
 	headers.Set("x-ratelimit-limit-tokens", "200000")
 
 	official := buildOpenAIValidationResult(mustParseURL(t, "https://api.openai.com/v1/chat/completions"), "gpt-4.1-nano", headers)
-	if !official.IsValid || !official.OpenAITierUpdated || official.OpenAITier != "T1" || official.OpenAITierReason != "inferred" {
+	if !official.IsValid || !official.TierUpdated || official.Tier != "T1" || official.TierProvider != "openai" ||
+		!official.OpenAITierUpdated || official.OpenAITier != "T1" || official.OpenAITierReason != "inferred" {
 		t.Fatalf("unexpected official result: %#v", official)
 	}
 
 	compatible := buildOpenAIValidationResult(mustParseURL(t, "https://example.com/v1/chat/completions"), "gpt-4.1-nano", headers)
-	if !compatible.IsValid || compatible.OpenAITierUpdated || compatible.OpenAITier != "" || compatible.OpenAITierReason != "not_official_openai" {
+	if !compatible.IsValid || compatible.TierUpdated || compatible.Tier != "" ||
+		compatible.OpenAITierUpdated || compatible.OpenAITier != "" || compatible.OpenAITierReason != "not_official_openai" {
 		t.Fatalf("unexpected compatible result: %#v", compatible)
 	}
 }
@@ -133,6 +135,54 @@ func TestBuildOpenAIValidationResultReturnsTierDiagnostics(t *testing.T) {
 	}
 	if result.OpenAITierReason != "missing_tokens_header" {
 		t.Fatalf("unexpected tier reason: %#v", result)
+	}
+}
+
+func TestInferAnthropicTierFromHeaders(t *testing.T) {
+	tests := []struct {
+		name     string
+		requests string
+		want     string
+	}{
+		{name: "tier 1", requests: "50", want: "T1"},
+		{name: "tier 2", requests: "1,000", want: "T2"},
+		{name: "tier 3", requests: "2000", want: "T3"},
+		{name: "tier 4", requests: "4000", want: "T4"},
+		{name: "custom limit", requests: "750", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := http.Header{}
+			headers.Set("anthropic-ratelimit-requests-limit", tt.requests)
+
+			if got := inferAnthropicTierFromHeaders(headers); got != tt.want {
+				t.Fatalf("unexpected tier: got %q want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildAnthropicValidationResultReturnsTierDiagnostics(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("anthropic-ratelimit-requests-limit", "1000")
+	headers.Set("anthropic-ratelimit-input-tokens-limit", "80000")
+	headers.Set("anthropic-ratelimit-output-tokens-limit", "16000")
+
+	result := buildAnthropicValidationResult(mustParseURL(t, "https://api.anthropic.com/v1/messages"), "claude-3-haiku-20240307", headers)
+	if !result.IsValid || !result.TierUpdated || result.Tier != "T2" || result.TierProvider != "anthropic" || result.TierReason != "inferred" {
+		t.Fatalf("unexpected validation result: %#v", result)
+	}
+	if result.TierModel != "claude-3-haiku-20240307" || result.TierHost != "api.anthropic.com" {
+		t.Fatalf("unexpected model or host diagnostics: %#v", result)
+	}
+	if result.RequestsLimit != "1000" || result.InputTokensLimit != "80000" || result.OutputTokensLimit != "16000" {
+		t.Fatalf("unexpected rate limit diagnostics: %#v", result)
+	}
+
+	compatible := buildAnthropicValidationResult(mustParseURL(t, "https://example.com/v1/messages"), "claude-3-haiku-20240307", headers)
+	if !compatible.IsValid || compatible.TierUpdated || compatible.Tier != "" || compatible.TierReason != "not_official_anthropic" {
+		t.Fatalf("unexpected compatible result: %#v", compatible)
 	}
 }
 

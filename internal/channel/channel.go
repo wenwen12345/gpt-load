@@ -45,6 +45,16 @@ type ChannelProxy interface {
 // KeyValidationResult holds channel-specific metadata discovered during key validation.
 type KeyValidationResult struct {
 	IsValid             bool
+	Tier                string
+	TierUpdated         bool
+	TierProvider        string
+	TierReason          string
+	TierModel           string
+	TierHost            string
+	RequestsLimit       string
+	TokensLimit         string
+	InputTokensLimit    string
+	OutputTokensLimit   string
 	OpenAITier          string
 	OpenAITierUpdated   bool
 	OpenAIModel         string
