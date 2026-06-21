@@ -181,6 +181,10 @@ func GetValidationEndpoint(group *models.Group) string {
 	switch group.ChannelType {
 	case "openai":
 		return "/v1/chat/completions"
+	case "deepseek":
+		return "/chat/completions"
+	case "openrouter":
+		return "/api/v1/chat/completions"
 	case "openai-response":
 		return "/v1/responses"
 	case "openai-image-generation":

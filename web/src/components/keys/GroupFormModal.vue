@@ -124,6 +124,10 @@ const testModelPlaceholder = computed(() => {
     case "openai":
     case "openai-response":
       return "gpt-4.1-nano";
+    case "deepseek":
+      return "deepseek-chat";
+    case "openrouter":
+      return "openai/gpt-4.1-nano";
     case "openai-image-generation":
       return "gpt-image-2";
     case "gemini":
@@ -141,6 +145,10 @@ const upstreamPlaceholder = computed(() => {
     case "openai-response":
     case "openai-image-generation":
       return "https://api.openai.com";
+    case "deepseek":
+      return "https://api.deepseek.com";
+    case "openrouter":
+      return "https://openrouter.ai";
     case "gemini":
       return "https://generativelanguage.googleapis.com";
     case "anthropic":
@@ -154,6 +162,10 @@ const validationEndpointPlaceholder = computed(() => {
   switch (formData.channel_type) {
     case "openai":
       return "/v1/chat/completions";
+    case "deepseek":
+      return "/chat/completions";
+    case "openrouter":
+      return "/api/v1/chat/completions";
     case "openai-response":
       return "/v1/responses";
     case "openai-image-generation":
@@ -258,6 +270,10 @@ function getOldDefaultTestModel(channelType: string): string {
     case "openai":
     case "openai-response":
       return "gpt-4.1-nano";
+    case "deepseek":
+      return "deepseek-chat";
+    case "openrouter":
+      return "openai/gpt-4.1-nano";
     case "openai-image-generation":
       return "gpt-image-2";
     case "gemini":
@@ -275,6 +291,10 @@ function getOldDefaultUpstream(channelType: string): string {
     case "openai-response":
     case "openai-image-generation":
       return "https://api.openai.com";
+    case "deepseek":
+      return "https://api.deepseek.com";
+    case "openrouter":
+      return "https://openrouter.ai";
     case "gemini":
       return "https://generativelanguage.googleapis.com";
     case "anthropic":

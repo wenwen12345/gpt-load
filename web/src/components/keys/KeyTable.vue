@@ -340,6 +340,10 @@ function getTierTestMessage(
 
   const provider = formatTierProvider(result.tier_provider);
   if (tier) {
+    if (reason === "balance") {
+      const message = t("keys.testSuccessBalance", { provider, balance: tier, duration });
+      return details ? `${message} (${details})` : message;
+    }
     const message = t("keys.testSuccessTier", { provider, tier, duration });
     return details ? `${message} (${details})` : message;
   }
@@ -356,6 +360,10 @@ function formatTierProvider(provider?: string): string {
   switch (provider) {
     case "anthropic":
       return "Claude";
+    case "deepseek":
+      return "DeepSeek";
+    case "openrouter":
+      return "OpenRouter";
     case "openai":
     default:
       return "OpenAI";

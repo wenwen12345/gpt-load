@@ -45,6 +45,8 @@ const channelTypeOptions = [
   { label: "OpenAI", value: "openai" as ChannelType },
   { label: "OpenAI Response", value: "openai-response" as ChannelType },
   { label: "OpenAI Image Generation", value: "openai-image-generation" as ChannelType },
+  { label: "DeepSeek", value: "deepseek" as ChannelType },
+  { label: "OpenRouter", value: "openrouter" as ChannelType },
   { label: "Gemini", value: "gemini" as ChannelType },
   { label: "Anthropic", value: "anthropic" as ChannelType },
 ];

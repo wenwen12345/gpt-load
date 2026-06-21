@@ -201,6 +201,7 @@ export default {
     copyFailed: "Copy failed",
     testingKey: "Testing key...",
     testSuccess: "Key test successful (Duration: {duration})",
+    testSuccessBalance: "Key test successful (Duration: {duration}), {provider} Balance: {balance}",
     testSuccessTier: "Key test successful (Duration: {duration}), {provider} Tier: {tier}",
     testSuccessTierMissing:
       "Key test successful (Duration: {duration}), but {provider} Tier was not inferred: {reason}",
@@ -312,7 +313,7 @@ export default {
     displayNameTooltip:
       "Friendly name displayed in the UI, can contain Chinese and special characters. If not filled, group name will be used as display name",
     channelTypeTooltip:
-      "Select API provider type, determines request format and authentication method. Supports major AI providers like OpenAI, Gemini, Anthropic",
+      "Select API provider type, determines request format and authentication method. Supports major AI providers like OpenAI, DeepSeek, OpenRouter, Gemini, Anthropic",
     sortOrderTooltip:
       "Determines display order in the list, smaller numbers appear first. Recommend using intervals like 10, 20, 30 for easy adjustment",
     sortValue: "Sort value",

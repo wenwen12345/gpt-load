@@ -16,6 +16,8 @@ export type ChannelType =
   | "openai"
   | "openai-response"
   | "openai-image-generation"
+  | "deepseek"
+  | "openrouter"
   | "gemini"
   | "anthropic";
 

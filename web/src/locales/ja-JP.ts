@@ -200,6 +200,7 @@ export default {
     copyFailed: "コピーに失敗しました",
     testingKey: "キーをテスト中...",
     testSuccess: "キーテスト成功（所要時間: {duration}）",
+    testSuccessBalance: "キーテスト成功（所要時間: {duration}）、{provider} 残高: {balance}",
     testSuccessTier: "キーテスト成功（所要時間: {duration}）、{provider} Tier: {tier}",
     testSuccessTierMissing:
       "キーテスト成功（所要時間: {duration}）、{provider} Tier を推定できませんでした: {reason}",
@@ -311,7 +312,7 @@ export default {
     displayNameTooltip:
       "UIに表示されるフレンドリーな名前、中国語や特殊文字を含むことができます。未入力の場合、グループ名が表示名として使用されます",
     channelTypeTooltip:
-      "APIプロバイダータイプを選択、リクエスト形式と認証方法を決定します。OpenAI、Gemini、Anthropicなどの主要AIプロバイダーをサポート",
+      "APIプロバイダータイプを選択、リクエスト形式と認証方法を決定します。OpenAI、DeepSeek、OpenRouter、Gemini、Anthropicなどの主要AIプロバイダーをサポート",
     sortOrderTooltip:
       "リスト内の表示順序を決定、数値が小さいほど前に表示されます。10、20、30のような間隔での設定を推奨",
     sortValue: "ソート値",

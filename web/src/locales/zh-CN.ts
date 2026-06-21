@@ -199,6 +199,7 @@ export default {
     copyFailed: "复制失败",
     testingKey: "正在测试密钥...",
     testSuccess: "密钥测试成功 (耗时: {duration})",
+    testSuccessBalance: "密钥测试成功 (耗时: {duration})，{provider} 余额: {balance}",
     testSuccessTier: "密钥测试成功 (耗时: {duration})，{provider} Tier: {tier}",
     testSuccessTierMissing: "密钥测试成功 (耗时: {duration})，但未推断出 {provider} Tier: {reason}",
     testFailed: "密钥测试失败: 无效的API密钥",
@@ -306,7 +307,7 @@ export default {
     displayNameTooltip:
       "用于在界面上显示的友好名称，可以包含中文和特殊字符。如果不填写，将使用分组名称作为显示名称",
     channelTypeTooltip:
-      "选择API提供商类型，决定了请求格式和认证方式。支持OpenAI、Gemini、Anthropic等主流AI服务商",
+      "选择API提供商类型，决定了请求格式和认证方式。支持OpenAI、DeepSeek、OpenRouter、Gemini、Anthropic等主流AI服务商",
     sortOrderTooltip:
       "决定分组在列表中的显示顺序，数字越小越靠前。建议使用10、20、30这样的间隔数字，便于后续调整",
     sortValue: "排序值",
