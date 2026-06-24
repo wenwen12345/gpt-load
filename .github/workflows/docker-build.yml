@@ -2,6 +2,7 @@ name: Build Docker Image
 
 on:
   push:
+  workflow_dispatch:
 jobs:
   build_docker_image:
     name: Build Docker Image
