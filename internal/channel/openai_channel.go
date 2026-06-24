@@ -86,9 +86,10 @@ func (ch *OpenAIChannel) ValidateKey(ctx context.Context, apiKey *models.APIKey,
 	}
 
 	// Build final URL with path and query parameters
-	finalURL := *upstreamURL
-	finalURL.Path = strings.TrimRight(finalURL.Path, "/") + endpointURL.Path
-	finalURL.RawQuery = endpointURL.RawQuery
+	finalURL, err := ch.BuildValidationURL(endpointURL)
+	if err != nil {
+		return KeyValidationResult{}, err
+	}
 	reqURL := finalURL.String()
 
 	// Use a minimal, low-cost payload matching the validation endpoint format.

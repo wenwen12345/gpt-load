@@ -22,6 +22,12 @@ type UpstreamInfo struct {
 	URL           *url.URL
 	Weight        int
 	CurrentWeight int
+	// URLMode controls how the upstream URL is combined with the incoming request path:
+	// "host" (default) treats URL as a bare host; client request path is appended verbatim.
+	// "prefix" treats URL (including any path) as a base prefix; client path is appended
+	// after stripping duplicate leading segments.
+	// "full" treats URL as a complete endpoint; it is used verbatim for every request.
+	URLMode string
 }
 
 // BaseChannel provides common functionality for channel proxies.
@@ -44,6 +50,16 @@ type BaseChannel struct {
 
 // getUpstreamURL selects an upstream URL using a smooth weighted round-robin algorithm.
 func (b *BaseChannel) getUpstreamURL() *url.URL {
+	info := b.getUpstreamInfo()
+	if info == nil {
+		return nil
+	}
+	return info.URL
+}
+
+// getUpstreamInfo selects an upstream using a smooth weighted round-robin algorithm
+// and returns the full UpstreamInfo (including URLMode).
+func (b *BaseChannel) getUpstreamInfo() *UpstreamInfo {
 	b.upstreamLock.Lock()
 	defer b.upstreamLock.Unlock()
 
@@ -51,7 +67,7 @@ func (b *BaseChannel) getUpstreamURL() *url.URL {
 		return nil
 	}
 	if len(b.Upstreams) == 1 {
-		return b.Upstreams[0].URL
+		return &b.Upstreams[0]
 	}
 
 	totalWeight := 0
@@ -68,30 +84,91 @@ func (b *BaseChannel) getUpstreamURL() *url.URL {
 	}
 
 	if best == nil {
-		return b.Upstreams[0].URL // 降级到第一个可用的
+		return &b.Upstreams[0] // 降级到第一个可用的
 	}
 
 	best.CurrentWeight -= totalWeight
-	return best.URL
+	return best
+}
+
+// CombineUpstreamPath merges an upstream base path with a request path according to urlMode:
+//   - "host" (default): the upstream is a bare host; the request path is appended verbatim.
+//   - "prefix": the upstream path is a base prefix; duplicate leading segments shared with
+//     the request path are stripped to avoid doubled prefixes (e.g. /v1 + /v1/chat → /v1/chat).
+//   - "full": the upstream path is used verbatim; the request path is ignored.
+func CombineUpstreamPath(upstreamPath, requestPath, urlMode string) string {
+	switch urlMode {
+	case "full":
+		return strings.TrimRight(upstreamPath, "/")
+	case "prefix":
+		return mergePathPrefix(upstreamPath, requestPath)
+	default:
+		return strings.TrimRight(upstreamPath, "/") + requestPath
+	}
+}
+
+// mergePathPrefix joins upstreamPath and requestPath, removing the longest
+// common leading segment prefix so that overlapping path segments are not
+// duplicated (e.g. "/v1" + "/v1/chat/completions" → "/v1/chat/completions",
+// "/v1/ai" + "/v1/chat/completions" → "/v1/ai/chat/completions").
+func mergePathPrefix(upstreamPath, requestPath string) string {
+	upstreamPath = strings.TrimRight(upstreamPath, "/")
+	if upstreamPath == "" {
+		return requestPath
+	}
+	if requestPath == "" || requestPath == "/" {
+		return upstreamPath
+	}
+
+	upSegs := strings.Split(strings.TrimPrefix(strings.TrimSuffix(upstreamPath, "/"), "/"), "/")
+	reqSegs := strings.Split(strings.TrimPrefix(strings.TrimSuffix(requestPath, "/"), "/"), "/")
+
+	common := 0
+	for i := 0; i < len(upSegs) && i < len(reqSegs); i++ {
+		if upSegs[i] == reqSegs[i] {
+			common++
+		} else {
+			break
+		}
+	}
+
+	result := upstreamPath
+	for i := common; i < len(reqSegs); i++ {
+		result += "/" + reqSegs[i]
+	}
+	return result
 }
 
 // BuildUpstreamURL constructs the target URL for the upstream service.
 func (b *BaseChannel) BuildUpstreamURL(originalURL *url.URL, groupName string) (string, error) {
-	base := b.getUpstreamURL()
-	if base == nil {
+	info := b.getUpstreamInfo()
+	if info == nil {
 		return "", fmt.Errorf("no upstream URL configured for channel %s", b.Name)
 	}
 
-	finalURL := *base
 	proxyPrefix := "/proxy/" + groupName
 	requestPath := originalURL.Path
 	requestPath = strings.TrimPrefix(requestPath, proxyPrefix)
 
-	finalURL.Path = strings.TrimRight(finalURL.Path, "/") + requestPath
-
+	finalURL := *info.URL
+	finalURL.Path = CombineUpstreamPath(finalURL.Path, requestPath, info.URLMode)
 	finalURL.RawQuery = originalURL.RawQuery
 
 	return finalURL.String(), nil
+}
+
+// BuildValidationURL combines the selected upstream with the validation endpoint
+// path, respecting the upstream URLMode. Channels should use this in ValidateKey.
+func (b *BaseChannel) BuildValidationURL(endpointURL *url.URL) (url.URL, error) {
+	info := b.getUpstreamInfo()
+	if info == nil {
+		return url.URL{}, fmt.Errorf("no upstream URL configured for channel %s", b.Name)
+	}
+
+	finalURL := *info.URL
+	finalURL.Path = CombineUpstreamPath(finalURL.Path, endpointURL.Path, info.URLMode)
+	finalURL.RawQuery = endpointURL.RawQuery
+	return finalURL, nil
 }
 
 // IsConfigStale checks if the channel's configuration is stale compared to the provided group.

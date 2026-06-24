@@ -320,7 +320,16 @@ export default {
     proxyKeysCopied: "代理密钥已复制到剪贴板",
     multiKeysPlaceholder: "多个密钥请用英文逗号 , 分隔",
     descriptionTooltip: "分组的详细说明，帮助团队成员了解该分组的用途和特点。支持多行文本",
-    upstreamTooltip: "API服务器的完整URL地址。多个上游可以实现负载均衡和故障转移，提高服务可用性",
+    upstreamTooltip:
+      "API服务器的完整URL地址，支持填到域名、版本路径（如 /v1）或完整端点路径（如 /v1/chat/completions），系统会自动识别并规范化。多个上游可以实现负载均衡和故障转移，提高服务可用性",
+    urlMode: "URL模式",
+    urlModeHost: "仅域名",
+    urlModePrefix: "前缀路径",
+    urlModeFull: "完整路径",
+    urlModeTooltip: "决定上游地址与客户端请求路径的拼接方式",
+    urlModeHostTip: "仅域名：上游地址仅作为主机名，客户端请求路径原样追加（默认）",
+    urlModePrefixTip: "前缀路径：上游地址作为路径前缀，自动去除与请求路径重复的前缀段",
+    urlModeFullTip: "完整路径：上游地址作为完整端点直接使用，忽略客户端请求路径",
     weightTooltip:
       "负载均衡权重配置。权重决定流量分配比例，数值越大获得的流量越多。权重为0时禁用该上游（不接收任何请求）。示例：权重2:1表示前者获得约67%的流量",
     addUpstream: "添加上游地址",

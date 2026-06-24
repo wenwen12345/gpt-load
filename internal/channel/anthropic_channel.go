@@ -87,9 +87,10 @@ func (ch *AnthropicChannel) ValidateKey(ctx context.Context, apiKey *models.APIK
 	}
 
 	// Build final URL with path and query parameters
-	finalURL := *upstreamURL
-	finalURL.Path = strings.TrimRight(finalURL.Path, "/") + endpointURL.Path
-	finalURL.RawQuery = endpointURL.RawQuery
+	finalURL, err := ch.BuildValidationURL(endpointURL)
+	if err != nil {
+		return KeyValidationResult{}, err
+	}
 	reqURL := finalURL.String()
 
 	// Use a minimal payload matching the Anthropic Messages API format.

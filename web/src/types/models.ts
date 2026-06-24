@@ -36,9 +36,12 @@ export interface APIKey {
   updated_at: string;
 }
 
+export type UpstreamURLMode = "host" | "prefix" | "full";
+
 export interface UpstreamInfo {
   url: string;
   weight: number;
+  url_mode?: UpstreamURLMode;
 }
 
 export interface HeaderRule {

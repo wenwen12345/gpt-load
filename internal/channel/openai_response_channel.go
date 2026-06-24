@@ -81,9 +81,10 @@ func (ch *OpenAIResponseChannel) ValidateKey(ctx context.Context, apiKey *models
 		return KeyValidationResult{}, fmt.Errorf("failed to parse validation endpoint: %w", err)
 	}
 
-	finalURL := *upstreamURL
-	finalURL.Path = strings.TrimRight(finalURL.Path, "/") + endpointURL.Path
-	finalURL.RawQuery = endpointURL.RawQuery
+	finalURL, err := ch.BuildValidationURL(endpointURL)
+	if err != nil {
+		return KeyValidationResult{}, err
+	}
 	reqURL := finalURL.String()
 
 	payload := buildOpenAIValidationPayload(endpointURL.Path, ch.TestModel)

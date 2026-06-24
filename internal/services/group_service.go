@@ -940,8 +940,9 @@ func (s *GroupService) validateAndCleanUpstreams(upstreams json.RawMessage) (dat
 	}
 
 	var defs []struct {
-		URL    string `json:"url"`
-		Weight int    `json:"weight"`
+		URL     string `json:"url"`
+		Weight  int    `json:"weight"`
+		URLMode string `json:"url_mode"`
 	}
 	if err := json.Unmarshal(upstreams, &defs); err != nil {
 		return nil, NewI18nError(app_errors.ErrValidation, "validation.invalid_upstreams", map[string]any{"error": err.Error()})
@@ -963,6 +964,7 @@ func (s *GroupService) validateAndCleanUpstreams(upstreams json.RawMessage) (dat
 		if defs[i].Weight < 0 {
 			return nil, NewI18nError(app_errors.ErrValidation, "validation.invalid_upstreams", map[string]any{"error": "upstream weight must be a non-negative integer"})
 		}
+		defs[i].URLMode = normalizeUpstreamURLMode(defs[i].URLMode)
 		if defs[i].Weight > 0 {
 			hasActiveUpstream = true
 		}
@@ -978,6 +980,18 @@ func (s *GroupService) validateAndCleanUpstreams(upstreams json.RawMessage) (dat
 	}
 
 	return datatypes.JSON(cleanedUpstreams), nil
+}
+
+// normalizeUpstreamURLMode canonicalizes the url_mode field stored on each upstream.
+// Accepted values (case-insensitive): "host", "prefix", "full".
+// Empty or unrecognized values default to "host".
+func normalizeUpstreamURLMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "prefix", "full":
+		return strings.ToLower(strings.TrimSpace(mode))
+	default:
+		return "host"
+	}
 }
 
 func calculateRequestStats(total, failed int64) RequestStats {

@@ -91,6 +91,7 @@ const formData = reactive<GroupFormData>({
     {
       url: "",
       weight: 1,
+      url_mode: "host",
     },
   ] as UpstreamInfo[],
   channel_type: "openai",
@@ -157,6 +158,12 @@ const upstreamPlaceholder = computed(() => {
       return t("keys.enterUpstreamUrl");
   }
 });
+
+const urlModeOptions = computed(() => [
+  { label: t("keys.urlModeHost"), value: "host" },
+  { label: t("keys.urlModePrefix"), value: "prefix" },
+  { label: t("keys.urlModeFull"), value: "full" },
+]);
 
 const validationEndpointPlaceholder = computed(() => {
   switch (formData.channel_type) {
@@ -320,6 +327,7 @@ function resetForm() {
       {
         url: isCreateMode ? upstreamPlaceholder.value : "",
         weight: 1,
+        url_mode: "host",
       },
     ],
     channel_type: defaultChannelType,
@@ -362,8 +370,8 @@ function loadGroupData() {
     display_name: props.group.display_name || "",
     description: props.group.description || "",
     upstreams: props.group.upstreams?.length
-      ? [...props.group.upstreams]
-      : [{ url: "", weight: 1 }],
+      ? props.group.upstreams.map(u => ({ url: u.url, weight: u.weight, url_mode: u.url_mode || "host" }))
+      : [{ url: "", weight: 1, url_mode: "host" as const }],
     channel_type: props.group.channel_type || "openai",
     sort: props.group.sort || 1,
     test_model: props.group.test_model || "",
@@ -398,6 +406,7 @@ function addUpstream() {
   formData.upstreams.push({
     url: "",
     weight: 1,
+    url_mode: "host",
   });
 }
 
@@ -408,6 +417,15 @@ function removeUpstream(index: number) {
   } else {
     message.warning(t("keys.atLeastOneUpstream"));
   }
+}
+
+// 确保每个上游都有 url_mode（向后兼容旧数据）
+function ensureUpstreamUrlMode(upstream: UpstreamInfo): UpstreamInfo {
+  return {
+    url: upstream.url,
+    weight: upstream.weight,
+    url_mode: upstream.url_mode || "host",
+  };
 }
 
 async function fetchGroupConfigOptions() {
@@ -558,7 +576,9 @@ async function handleSubmit() {
       name: formData.name,
       display_name: formData.display_name,
       description: formData.description,
-      upstreams: formData.upstreams.filter((upstream: UpstreamInfo) => upstream.url.trim()),
+      upstreams: formData.upstreams
+        .filter((upstream: UpstreamInfo) => upstream.url.trim())
+        .map(upstream => ensureUpstreamUrlMode(upstream)),
       channel_type: formData.channel_type,
       sort: formData.sort,
       test_model: formData.test_model,
@@ -840,6 +860,26 @@ async function handleSubmit() {
                   :placeholder="upstreamPlaceholder"
                   @input="() => !props.group && index === 0 && (userModifiedFields.upstream = true)"
                 />
+              </div>
+              <div class="upstream-mode">
+                <n-tooltip trigger="hover" placement="top" style="width: 100%">
+                  <template #trigger>
+                    <n-select
+                      v-model:value="upstream.url_mode"
+                      :options="urlModeOptions"
+                      :placeholder="t('keys.urlMode')"
+                      style="width: 100%"
+                    />
+                  </template>
+                  <div class="upstream-mode-tip">
+                    {{ t("keys.urlModeTooltip") }}
+                    <ul style="margin: 4px 0 0; padding-left: 16px">
+                      <li>{{ t("keys.urlModeHostTip") }}</li>
+                      <li>{{ t("keys.urlModePrefixTip") }}</li>
+                      <li>{{ t("keys.urlModeFullTip") }}</li>
+                    </ul>
+                  </div>
+                </n-tooltip>
               </div>
               <div class="upstream-weight">
                 <span class="weight-label">{{ t("keys.weight") }}</span>
@@ -1440,6 +1480,10 @@ async function handleSubmit() {
   flex: 1;
 }
 
+.upstream-mode {
+  flex: 0 0 120px;
+}
+
 .upstream-weight {
   display: flex;
   align-items: center;
@@ -1514,6 +1558,7 @@ async function handleSubmit() {
     align-items: stretch;
   }
 
+  .upstream-mode,
   .upstream-weight {
     flex: 1;
     flex-direction: column;

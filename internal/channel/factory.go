@@ -84,8 +84,9 @@ func (f *Factory) GetChannel(group *models.Group) (ChannelProxy, error) {
 // newBaseChannel is a helper function to create and configure a BaseChannel.
 func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel, error) {
 	type upstreamDef struct {
-		URL    string `json:"url"`
-		Weight int    `json:"weight"`
+		URL     string `json:"url"`
+		Weight  int    `json:"weight"`
+		URLMode string `json:"url_mode"`
 	}
 
 	var defs []upstreamDef
@@ -106,7 +107,7 @@ func (f *Factory) newBaseChannel(name string, group *models.Group) (*BaseChannel
 		if def.Weight <= 0 {
 			continue
 		}
-		upstreamInfos = append(upstreamInfos, UpstreamInfo{URL: u, Weight: def.Weight})
+		upstreamInfos = append(upstreamInfos, UpstreamInfo{URL: u, Weight: def.Weight, URLMode: normalizeURLMode(def.URLMode)})
 	}
 
 	// Base configuration for regular requests, derived from the group's effective settings.

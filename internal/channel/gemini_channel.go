@@ -157,17 +157,27 @@ func (ch *GeminiChannel) buildValidationRequest(apiKey *models.APIKey) (string, 
 	}
 
 	if isGeminiOpenAICompatibleEndpoint(endpointURL.Path) {
-		finalURL := *upstreamURL
-		finalURL.Path = strings.TrimRight(finalURL.Path, "/") + endpointURL.Path
-		finalURL.RawQuery = endpointURL.RawQuery
+		finalURL, err := ch.BuildValidationURL(endpointURL)
+		if err != nil {
+			return "", nil, "", err
+		}
 		return finalURL.String(), buildOpenAIValidationPayload(endpointURL.Path, ch.TestModel), "bearer", nil
 	}
 
-	reqURL, err := url.JoinPath(upstreamURL.String(), "v1beta", "models", ch.TestModel+":generateContent")
+	nativeEndpoint, err := url.Parse("v1beta/models/" + ch.TestModel + ":generateContent")
 	if err != nil {
 		return "", nil, "", fmt.Errorf("failed to create gemini validation path: %w", err)
 	}
-	reqURL += "?key=" + apiKey.KeyValue
+	finalURL, err := ch.BuildValidationURL(nativeEndpoint)
+	if err != nil {
+		return "", nil, "", err
+	}
+	reqURL := finalURL.String()
+	if strings.Contains(reqURL, "?") {
+		reqURL += "&key=" + apiKey.KeyValue
+	} else {
+		reqURL += "?key=" + apiKey.KeyValue
+	}
 
 	return reqURL, buildGeminiNativeValidationPayload(), "query", nil
 }
